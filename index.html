@@ -110,10 +110,10 @@
 
     function volcanoTooltip(feature, layer) {
           layer.bindPopup(
-            `<strong>${ feature.properties.name }</strong><br>\
+            `<strong><a href=${ feature.properties.wiki } target="_blank">${ feature.properties.name }</a></strong><br>\
             Elevation: ${ feature.properties.elevation_metres }m<br>\
             Last erruption: ${ feature.properties.last_known_erruption }<br>\
-            <a href="https://en.wikipedia.org/wiki/List_of_volcanoes_in_Antarctica" target="_blank">Wikipedia</a>`
+            <a href="https://en.wikipedia.org/wiki/List_of_volcanoes_in_Antarctica" target="_blank">List of volcanoes in Antarctica (Wikipedia)</a>`
           );
     }
 
