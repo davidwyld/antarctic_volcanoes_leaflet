@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Antarctic Volcanoes</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+  <div id="map" style="height:100vh"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="./dist/leaflet.tilelayer.wmts.min.js"></script>
+  <script src="https://unpkg.com/proj4leaflet@1.0.2/lib/proj4-compressed.js" integrity="sha384-R7x++v2MKcATI+D1/GJsn636xbHca492Sdpm8BD36lj5vdWB9+OUBpM1oKkrzqv9" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/proj4leaflet@1.0.2/src/proj4leaflet.js" integrity="sha384-aDnBHDK9AhLbrYhThBxEVMriFbix8Sz2059IlD3HbZhz7+WNmz+pSkOcI7MY72cE" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/leaflet-polar-graticule@0.1.1/L.Graticule.min.js" integrity="sha256-qcx0lAi/Z5A1QY1n74v2fjE4BDRHtTMyJOcdsvbRudU=" crossorigin="anonymous"></script>
+  <script src="./data/subglacial.js"></script>
+  <script src="./data/volcanoes_3031.js"></script>
+  <script>
+    //The South Polar projection
+    const proj = 'EPSG:3031';
+    const proj4= '+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+    
+    var pixel_ratio = parseInt(window.devicePixelRatio) || 1;
+
+    // maximum zoom level (set to higher number for more zoom)
+    var max_zoom = 13;
+    // tile size for OpenStreetMap base layer
+    var tile_size = 256;
+
+    // extent of map to equator (based on tile size of 512),
+    // see https://tile.gbif.org/ui/
+    // note because of the projection the extent will be a circle, with Antarctica in the center
+    // however the overall map will be square (with blanks in corners)
+    var extent = 3.06359554472718E7;// 4898864.755333455*6.255;
+    // generate zoom resolutions array
+    // will end up with array starting at around 48000 (fully zoomed out) to ≈188
+    // needed for GBIF tiles - changing generated resolutions will impact tiles!
+    var resolutions = Array(max_zoom + 1).fill().map((_, i) => ( extent / tile_size / Math.pow(2, i-1) ));
+
+    let crs= new L.Proj.CRS(proj, proj4, {
+        resolutions: resolutions,
+        origin: [-extent, extent],
+        bounds: L.bounds(L.point(-extent, extent), L.point(extent, -extent)),
+    }) ;
+
+    var map = L.map("map",{
+      crs:crs,
+      center: [-90, 0],
+      zoom:5,
+      zoom: pixel_ratio > 1 ? 2 : 3,
+      worldCopyJump: false,
+    }).setView([-90, 0], 5);
+
+    var basemap = L.tileLayer(
+    "https://tiles.arcgis.com/tiles/tPxy1hrFDhJfZ0Mf/arcgis/rest/services/Antarctica_and_the_Southern_Ocean/MapServer/wmts/tile/1.0.0/{layer}/{style}/{tileMatrixSet}/{z}/{y}/{x}   ",
+    {
+        layer: "Antarctica_and_the_Southern_Ocean",
+        style: "default",
+        tileMatrixSet: "default028mm",
+        tileSize: 256,
+        minZoom: 3,
+        maxZoom: 13,
+        zoomOffset: 0,
+        attribution:"<a href='https://bas.ac.uk'>British Antarctic Survey</a>",
+    }
+    ).addTo(map);
+
+    L.graticule({ 
+      intervalLat: 10, intervalLng: 45, latBounds: [-90,-55], centerLonLabels:true, style: {opacity: 0.5, color: "#555555", weight: 0.5}
+    }).addTo(map);
+
+    L.control.scale().addTo(map);
+
+    var subglacialMarkerOptions = {
+        radius: 8,
+        fillColor: "#005AB5",
+        color: "#000",
+        weight: 0,
+        opacity: 0,
+        fillOpacity: 0.8
+    };
+
+    function subglacialTooltip(feature, layer) {
+      layer.bindPopup(
+        `Height: ${feature.properties.height_m}m<br>\
+        Avg. Diameter: ${feature.properties.average_diameter_km}km<br>\
+        Volume: ${feature.properties.volume_km^3}km<sup>3</sup><br>\
+        Confidence Factor: ${feature.properties.confidence_factor_Sum}/5<br>\
+        Previously Identified?: ${feature.properties.previously_identified}<br>\
+        <a href="https://doi.org/10.1144/SP461.7" target="_blank"><emph>van Wyk de Vries et al. (2018)</emph></a>`
+      );
+    }
+
+    var subglacial_geojson_layer = L.Proj.geoJson(subglacial, {
+        onEachFeature: subglacialTooltip,
+        pointToLayer: function (feature, latlng) {
+            return L.circleMarker(latlng, subglacialMarkerOptions);
+        },
+        attribution: '<a href="https://doi.org/10.1144/SP461.7" target="_blank">van Wyk de Vries et al. (2018)</a>'
+    }).addTo(map);
+
+    var volcanoMarkerOptions = {
+        radius: 8,
+        fillColor: "#DC3220",
+        color: "#000",
+        weight: 0,
+        opacity: 0,
+        fillOpacity: 0.8
+    };
+
+    function volcanoTooltip(feature, layer) {
+          layer.bindPopup(
+            `<strong>${ feature.properties.name }</strong><br>\
+            Elevation: ${ feature.properties.elevation_metres }m<br>\
+            Last erruption: ${ feature.properties.last_known_erruption }<br>\
+            <a href="https://en.wikipedia.org/wiki/List_of_volcanoes_in_Antarctica" target="_blank">Wikipedia</a>`
+          );
+    }
+
+    var volcano_geojson_layer = L.Proj.geoJson(volcanoes, {
+        onEachFeature: volcanoTooltip,
+        pointToLayer: function (feature, latlng) {
+            return L.circleMarker(latlng, volcanoMarkerOptions);
+        },
+        attribution: '<a href="https://en.wikipedia.org/wiki/List_of_volcanoes_in_Antarctica" target="_blank">Wikipedia</a>'
+    }).addTo(map);
+
+    var layerControl = L.control.layers(
+      {basemap},
+      {
+        "Surface Volcanoes": volcano_geojson_layer,
+        "Subglacial Volcanoes": subglacial_geojson_layer,
+      },
+      {
+        hideSingleBase: true,
+        collapsed: false,
+      }
+    ).addTo(map);
+
+
+  </script>
+</body>
+</html>
